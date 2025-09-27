@@ -1,0 +1,50 @@
+{
+  "name": "wassail",
+  "version": "0.0.1",
+  "description": "Advent of Code toolkit for Node.js. Minimal CLI to fetch puzzle inputs using your AOC_SESSION cookie.",
+  "type": "module",
+  "bin": {
+    "wassail": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "devDependencies": {
+    "@eslint/js": "^9.36.0",
+    "@types/node": "^24.5.2",
+    "eslint": "^9.36.0",
+    "eslint-config-prettier": "^10.1.8",
+    "globals": "^16.4.0",
+    "prettier": "3.6.2",
+    "tsdown": "^0.15.5",
+    "typescript": "^5.9.2",
+    "typescript-eslint": "^8.44.1"
+  },
+  "scripts": {
+    "build": "tsdown",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "advent-of-code",
+    "aoc",
+    "cli",
+    "typescript",
+    "node"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/snally-labs/wassail.git"
+  },
+  "author": "Caleb Kinney",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/snally-labs/wassail/issues"
+  },
+  "homepage": "https://github.com/snally-labs/wassail#readme",
+  "publishConfig": {
+    "access": "public"
+  }
+}
