@@ -11,7 +11,7 @@ import {
   PuzzleLockedError,
   SubmissionError,
 } from "./errors.js";
-import { AocClient } from "./http.js";
+import { AocClient, isTimeoutError } from "./http.js";
 import {
   alreadyCompletedMessage,
   answerTooHighMessage,
@@ -45,21 +45,20 @@ const REQUIRED_FIELDS = ["timestamp", "part", "guess", "status"];
 
 export function normalizeAnswer(answer: number | string): {
   answer: number | string;
-  numericAnswer: number | null;
+  numericAnswer: bigint | null;
 } {
   if (typeof answer === "string") {
     const stripped = answer.trim();
     if (!stripped) throw new RangeError("Answer cannot be empty.");
-    const numeric = /^[+-]?\d+$/.test(stripped) ? Number(stripped) : Number.NaN;
     return {
       answer: stripped,
-      numericAnswer: Number.isSafeInteger(numeric) ? numeric : null,
+      numericAnswer: integerValue(stripped),
     };
   }
   if (!Number.isFinite(answer)) throw new RangeError("Answer must be finite.");
   return {
     answer,
-    numericAnswer: Number.isSafeInteger(answer) ? answer : null,
+    numericAnswer: Number.isSafeInteger(answer) ? BigInt(answer) : null,
   };
 }
 
@@ -146,7 +145,7 @@ export async function submitToAoc(
       level,
     );
   } catch (error) {
-    if ((error as Error).name === "TimeoutError") {
+    if (isTimeoutError(error)) {
       throw new SubmissionError(
         "Timed out while submitting answer. Try again or check your network.",
       );
@@ -155,7 +154,16 @@ export async function submitToAoc(
       `Network error while connecting to Advent of Code: ${String(error)}`,
     );
   }
-  const responseText = await response.text();
+  let responseText: string;
+  try {
+    responseText = await response.text();
+  } catch (error) {
+    throw new SubmissionError(
+      "The answer may have been submitted, but Advent of Code's response could not be read. " +
+        "Check the website before trying again. " +
+        `Details: ${isTimeoutError(error) ? "response timed out" : String(error)}`,
+    );
+  }
   if (response.status === 404) {
     if (responseText.includes("unlocks it for you")) {
       throw new SubmissionError("Puzzle not yet unlocked.");
@@ -378,13 +386,19 @@ export function checkCachedGuesses(
   day: number,
   level: number,
   answer: number | string,
-  numericAnswer: number | null,
+  numericAnswer: number | bigint | null,
   sessionToken?: string,
 ): CachedGuessCheck {
   const guesses = readGuesses(year, day, sessionToken);
   const now = new Date();
-  let highestLow: Guess | undefined;
-  let lowestHigh: Guess | undefined;
+  const candidate =
+    typeof numericAnswer === "bigint"
+      ? numericAnswer
+      : numericAnswer !== null && Number.isSafeInteger(numericAnswer)
+        ? BigInt(numericAnswer)
+        : null;
+  let highestLow: { guess: Guess; value: bigint } | undefined;
+  let lowestHigh: { guess: Guess; value: bigint } | undefined;
   let completed: Guess | undefined;
   let wait: Guess | undefined;
   let duplicate: Guess | undefined;
@@ -393,11 +407,12 @@ export function checkCachedGuesses(
     if (guess.status === SubmissionStatus.WAIT && retryAtFor(guess) > now)
       wait = guess;
     else if (wait && guess.timestamp >= wait.timestamp) wait = undefined;
+    const cachedNumeric = integerValue(guess.guess);
     const same =
       guess.guess === answer ||
-      (numericAnswer !== null &&
-        typeof guess.guess === "number" &&
-        guess.guess === numericAnswer);
+      (candidate !== null &&
+        cachedNumeric !== null &&
+        cachedNumeric === candidate);
     if (same && guess.status !== SubmissionStatus.WAIT) duplicate = guess;
     if (
       guess.status === SubmissionStatus.CORRECT ||
@@ -406,18 +421,16 @@ export function checkCachedGuesses(
       completed = guess;
     } else if (
       guess.status === SubmissionStatus.TOO_LOW &&
-      numericAnswer !== null &&
-      typeof guess.guess === "number" &&
-      (!highestLow || guess.guess > Number(highestLow.guess))
+      cachedNumeric !== null &&
+      (!highestLow || cachedNumeric > highestLow.value)
     ) {
-      highestLow = guess;
+      highestLow = { guess, value: cachedNumeric };
     } else if (
       guess.status === SubmissionStatus.TOO_HIGH &&
-      numericAnswer !== null &&
-      typeof guess.guess === "number" &&
-      (!lowestHigh || guess.guess < Number(lowestHigh.guess))
+      cachedNumeric !== null &&
+      (!lowestHigh || cachedNumeric < lowestHigh.value)
     ) {
-      lowestHigh = guess;
+      lowestHigh = { guess, value: cachedNumeric };
     }
   }
   if (duplicate?.status === SubmissionStatus.CORRECT) {
@@ -456,30 +469,20 @@ export function checkCachedGuesses(
       duplicate,
     );
   }
-  if (
-    numericAnswer !== null &&
-    highestLow &&
-    typeof highestLow.guess === "number" &&
-    numericAnswer <= highestLow.guess
-  ) {
+  if (candidate !== null && highestLow && candidate <= highestLow.value) {
     return cachedCheck(
       answer,
       SubmissionStatus.TOO_LOW,
-      cachedLowMessage(answer, highestLow),
-      highestLow,
+      cachedLowMessage(answer, highestLow.guess),
+      highestLow.guess,
     );
   }
-  if (
-    numericAnswer !== null &&
-    lowestHigh &&
-    typeof lowestHigh.guess === "number" &&
-    numericAnswer >= lowestHigh.guess
-  ) {
+  if (candidate !== null && lowestHigh && candidate >= lowestHigh.value) {
     return cachedCheck(
       answer,
       SubmissionStatus.TOO_HIGH,
-      cachedHighMessage(answer, lowestHigh),
-      lowestHigh,
+      cachedHighMessage(answer, lowestHigh.guess),
+      lowestHigh.guess,
     );
   }
   return {
@@ -508,6 +511,18 @@ function cachedCheck(
 
 const retryAtFor = (guess: Guess) =>
   guess.retryAt ?? new Date(guess.timestamp.valueOf() + WAIT_CACHE_TTL_MS);
+
+function integerValue(value: number | string): bigint | null {
+  if (typeof value === "number") {
+    return Number.isSafeInteger(value) ? BigInt(value) : null;
+  }
+  if (!/^[+-]?\d+$/.test(value)) return null;
+  try {
+    return BigInt(value);
+  } catch {
+    return null;
+  }
+}
 
 function waitMessage(retryAt: Date, cached: boolean): string {
   const timestamp = retryAt
