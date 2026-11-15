@@ -1,6 +1,6 @@
 import { aocDateParts } from "./events.js";
 import { StatusFetchError } from "./errors.js";
-import { AocClient } from "./http.js";
+import { AocClient, isTimeoutError } from "./http.js";
 import {
   OutputFormat,
   type DayStatus,
@@ -35,7 +35,7 @@ export async function getStatus(
   try {
     response = await new AocClient(sessionToken).fetchEvent(year);
   } catch (error) {
-    if ((error as Error).name === "TimeoutError") {
+    if (isTimeoutError(error)) {
       throw new StatusFetchError(
         "Timed out while fetching status. Try again or check your network.",
       );
@@ -50,7 +50,15 @@ export async function getStatus(
     serverError:
       "Server error from Advent of Code (HTTP {statusCode}). Your session token may be invalid.",
   });
-  const html = await response.text();
+  let html: string;
+  try {
+    html = await response.text();
+  } catch (error) {
+    const detail = isTimeoutError(error)
+      ? "Timed out while reading the status response."
+      : `Failed while reading the status response: ${String(error)}`;
+    throw new StatusFetchError(detail);
+  }
   if (!parseLoginState(html)) {
     throw new StatusFetchError(
       "Session cookie invalid or expired. Update AOC_SESSION with a valid 'session' cookie from your browser.",
