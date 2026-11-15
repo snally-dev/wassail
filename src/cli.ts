@@ -1,6 +1,6 @@
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync, realpathSync } from "node:fs";
 import { join } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath } from "node:url";
 import { parseArgs } from "node:util";
 import { submitAnswer } from "./answer.js";
 import { getCacheDir } from "./cache.js";
@@ -332,7 +332,18 @@ export async function main(
   }
 }
 
-const entryPoint = process.argv[1];
-if (entryPoint && import.meta.url === pathToFileURL(entryPoint).href) {
+export function isEntryPoint(
+  moduleUrl: string,
+  entryPoint: string | undefined,
+): boolean {
+  if (!entryPoint) return false;
+  try {
+    return realpathSync(entryPoint) === realpathSync(fileURLToPath(moduleUrl));
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint(import.meta.url, process.argv[1])) {
   process.exitCode = await main();
 }
