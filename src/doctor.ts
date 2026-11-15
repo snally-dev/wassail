@@ -41,7 +41,7 @@ export function runDoctor(now = new Date()): DoctorReport {
     {
       name: "AoC clock",
       status: CheckStatus.OK,
-      detail: `${now.toISOString()}; default puzzle ${year}-12-${String(day).padStart(2, "0")}`,
+      detail: `${formatAocDateTime(now)}; default puzzle ${year}-12-${String(day).padStart(2, "0")}`,
     },
     process.env["AOC_SESSION"]?.trim()
       ? {
@@ -75,6 +75,28 @@ export function runDoctor(now = new Date()): DoctorReport {
     checks,
     hasErrors: checks.some((check) => check.status === CheckStatus.ERROR),
   };
+}
+
+export function formatAocDateTime(date: Date): string {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: "America/New_York",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+    hourCycle: "h23",
+    timeZoneName: "longOffset",
+  }).formatToParts(date);
+  const value = (type: Intl.DateTimeFormatPartTypes): string =>
+    parts.find((part) => part.type === type)?.value ?? "";
+  const offset = value("timeZoneName").replace("GMT", "");
+  return (
+    `${value("year")}-${value("month")}-${value("day")}T` +
+    `${value("hour")}:${value("minute")}:${value("second")}${offset}` +
+    "[America/New_York]"
+  );
 }
 
 function cacheCheck(cacheDir: string): DoctorCheck {
