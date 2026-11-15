@@ -1,12 +1,29 @@
-import tsdownConfig from "./tsdown.config.js";
-
 import { defineConfig } from "vite-plus";
 
 export default defineConfig({
   staged: {
     "*": "vp check --fix",
   },
-  pack: tsdownConfig,
+  pack: {
+    deps: {
+      // tsdown <0.23 compatibility: resolve external dependency subpaths.
+      // Remove to preserve subpath imports as written (the new default).
+      // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+      resolveDepSubpath: true,
+    },
+    entry: ["src/index.ts", "src/cli.ts"],
+    outDir: "dist",
+    format: ["esm"],
+    platform: "node",
+    target: "node18",
+    dts: {
+      generator: "oxc",
+    },
+    sourcemap: true,
+    clean: true,
+    banner: (chunk) =>
+      chunk.fileName.endsWith("cli.mjs") ? "#!/usr/bin/env node" : "",
+  },
   lint: {
     plugins: ["oxc", "typescript", "unicorn"],
     categories: {
