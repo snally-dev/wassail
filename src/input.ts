@@ -6,7 +6,7 @@ import {
 } from "./cache.js";
 import { aocDateParts, getUnlockStatus, validateEventDay } from "./events.js";
 import { InputFetchError, PuzzleLockedError } from "./errors.js";
-import { AocClient } from "./http.js";
+import { AocClient, isTimeoutError } from "./http.js";
 import {
   handleHttpErrors,
   looksLikeLoginContent,
@@ -43,7 +43,7 @@ export async function getInput(
   try {
     response = await new AocClient(sessionToken).fetchInput(year, day);
   } catch (error) {
-    if ((error as Error).name === "TimeoutError") {
+    if (isTimeoutError(error)) {
       throw new InputFetchError(
         "Timed out while fetching puzzle input. Try again or check your network.",
       );
@@ -58,7 +58,15 @@ export async function getInput(
     serverError:
       "Server error from Advent of Code (HTTP {statusCode}). Your session token may be invalid.",
   });
-  const input = await response.text();
+  let input: string;
+  try {
+    input = await response.text();
+  } catch (error) {
+    const detail = isTimeoutError(error)
+      ? "Timed out while reading the puzzle input response."
+      : `Failed while reading the puzzle input response: ${String(error)}`;
+    throw new InputFetchError(detail);
+  }
   if (looksLikeLoginContent(input)) {
     throw new InputFetchError(
       "Session cookie invalid or expired. Update AOC_SESSION with a valid 'session' cookie from your browser.",
