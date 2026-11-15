@@ -4,6 +4,7 @@ import {
   closeSync,
   copyFileSync,
   existsSync,
+  fstatSync,
   mkdirSync,
   openSync,
   readFileSync,
@@ -190,14 +191,26 @@ export async function withCacheLock<T>(
   );
   ensurePrivateDirectory(dirname(lockFile));
   const deadline = Date.now() + timeoutMs;
-  let descriptor: number | undefined;
+  let lockIdentity: { device: number; inode: number } | undefined;
 
-  while (descriptor === undefined) {
+  while (lockIdentity === undefined) {
+    let descriptor: number | undefined;
     try {
       descriptor = openSync(lockFile, "wx", PRIVATE_FILE_MODE);
+      const lockStat = fstatSync(descriptor);
       writeFileSync(descriptor, `${process.pid} ${Date.now()}\n`);
       closeSync(descriptor);
+      descriptor = undefined;
+      lockIdentity = { device: lockStat.dev, inode: lockStat.ino };
     } catch (error) {
+      if (descriptor !== undefined) {
+        try {
+          closeSync(descriptor);
+        } catch {
+          // Preserve the original lock acquisition error.
+        }
+        rmSync(lockFile, { force: true });
+      }
       const code = (error as NodeJS.ErrnoException).code;
       if (code !== "EEXIST") throw error;
       try {
@@ -220,6 +233,16 @@ export async function withCacheLock<T>(
   try {
     return await callback();
   } finally {
-    rmSync(lockFile, { force: true });
+    try {
+      const current = statSync(lockFile);
+      if (
+        current.dev === lockIdentity.device &&
+        current.ino === lockIdentity.inode
+      ) {
+        rmSync(lockFile, { force: true });
+      }
+    } catch {
+      // The lock may have expired or already been removed.
+    }
   }
 }
