@@ -9,7 +9,7 @@ import {
   LeaderboardFetchError,
   MissingSessionTokenError,
 } from "./errors.js";
-import { AocClient } from "./http.js";
+import { AocClient, isTimeoutError } from "./http.js";
 import {
   OutputFormat,
   type Leaderboard,
@@ -108,7 +108,7 @@ async function fetchLeaderboardPayload(
       viewKey,
     );
   } catch (error) {
-    if ((error as Error).name === "TimeoutError") {
+    if (isTimeoutError(error)) {
       throw new LeaderboardFetchError(
         "Timed out while fetching leaderboard. Try again or check your network.",
       );
@@ -127,7 +127,12 @@ async function fetchLeaderboardPayload(
   let payload: unknown;
   try {
     payload = await response.json();
-  } catch {
+  } catch (error) {
+    if (isTimeoutError(error)) {
+      throw new LeaderboardFetchError(
+        "Timed out while reading the leaderboard response.",
+      );
+    }
     throw new LeaderboardFetchError(
       "Failed to decode leaderboard JSON. Your session/view key may be invalid.",
     );
