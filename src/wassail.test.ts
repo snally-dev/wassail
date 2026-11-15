@@ -3,11 +3,13 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  symlinkSync,
   existsSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
+import { pathToFileURL } from "node:url";
 import {
   afterEach,
   beforeEach,
@@ -29,7 +31,7 @@ import {
   getCacheLeaderboardFile,
   withCacheLock,
 } from "./cache.js";
-import { validateCommandArity } from "./cli.js";
+import { isEntryPoint, validateCommandArity } from "./cli.js";
 import { formatAocDateTime } from "./doctor.js";
 import {
   defaultEventDay,
@@ -432,6 +434,14 @@ describe("offline account selection", () => {
 });
 
 describe("CLI validation and diagnostics", () => {
+  it("recognizes an npm-style executable symlink as the entry point", () => {
+    const target = join(temporaryCache, "cli.mjs");
+    const link = join(temporaryCache, "wassail");
+    writeFileSync(target, "");
+    symlinkSync(target, link);
+    expect(isEntryPoint(pathToFileURL(target).href, link)).toBe(true);
+  });
+
   it("rejects extra and missing positional arguments", () => {
     expect(() => validateCommandArity("cache", ["extra"])).toThrow(
       "expects 0 positional arguments",
