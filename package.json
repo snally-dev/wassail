@@ -1,26 +1,47 @@
 {
   "name": "wassail",
-  "version": "0.0.1",
-  "description": "Advent of Code toolkit for Node.js. Minimal CLI to fetch puzzle inputs using your AOC_SESSION cookie.",
+  "version": "1.2.0",
+  "description": "Advent of Code helper for Node.js: fetch and cache inputs, submit answers, and pull private leaderboards.",
   "type": "module",
+  "sideEffects": false,
+  "main": "./dist/index.mjs",
+  "types": "./dist/index.d.mts",
   "bin": {
-    "wassail": "dist/cli.js"
+    "wassail": "dist/cli.mjs"
+  },
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.mts",
+      "import": "./dist/index.mjs"
+    }
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md"
   ],
   "engines": {
     "node": ">=18"
   },
+  "devEngines": {
+    "runtime": {
+      "name": "node",
+      "version": "26.13.1",
+      "onFail": "download"
+    }
+  },
+  "packageManager": "npm@11.20.0",
   "devDependencies": {
-    "@types/node": "^24.5.2",
-    "globals": "^16.4.0",
-    "typescript": "^5.9.2",
-    "vite-plus": "1.5.0"
+    "@types/node": "^26.6.6",
+    "globals": "^17.14.0",
+    "typescript": "^7.0.2",
+    "vite-plus": "1.6.0"
   },
   "scripts": {
     "build": "vp pack",
-    "test": "echo \"Error: no test specified\" && exit 1",
+    "check": "vp check",
+    "test": "vp test",
+    "prepack": "vp pack",
+    "prepublishOnly": "vp check && vp test",
     "prepare": "vp config"
   },
   "keywords": [
@@ -32,14 +53,14 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/snally-labs/wassail.git"
+    "url": "git+https://github.com/snally-dev/wassail.git"
   },
   "author": "Caleb Kinney",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/snally-labs/wassail/issues"
+    "url": "https://github.com/snally-dev/wassail/issues"
   },
-  "homepage": "https://github.com/snally-labs/wassail#readme",
+  "homepage": "https://github.com/snally-dev/wassail#readme",
   "publishConfig": {
     "access": "public"
   },
