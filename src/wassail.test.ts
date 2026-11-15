@@ -223,7 +223,8 @@ describe("leaderboards", () => {
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect((first as ReturnType<typeof parseLeaderboard>).ownerId).toBe(123);
-    expect(JSON.parse(second as string).owner_id).toBe(123);
+    const cachedJson: unknown = JSON.parse(second as string);
+    expect(cachedJson).toMatchObject({ owner_id: 123 });
     expect(
       getCacheLeaderboardFile(2024, 99, { sessionToken: "session-a" }),
     ).not.toBe(
