@@ -1,5 +1,6 @@
 import { existsSync, readdirSync } from "node:fs";
 import { join } from "node:path";
+import { pathToFileURL } from "node:url";
 import { parseArgs } from "node:util";
 import { submitAnswer } from "./answer.js";
 import { getCacheDir } from "./cache.js";
@@ -146,6 +147,7 @@ async function runCommand(
     process.stdout.write(`${COMMAND_HELP[command] ?? HELP}\n`);
     return 0;
   }
+  validateCommandArity(command, parsed.positionals);
   const currentYear = defaultEventYear();
   switch (command) {
     case "input": {
@@ -256,6 +258,33 @@ async function runCommand(
   }
 }
 
+export function validateCommandArity(
+  command: string,
+  positionals: string[],
+): void {
+  const ranges: Record<string, readonly [minimum: number, maximum: number]> = {
+    input: [0, 2],
+    answer: [4, 4],
+    leaderboard: [2, 2],
+    guesses: [0, 2],
+    status: [0, 1],
+    open: [0, 2],
+    new: [2, 2],
+    cache: [0, 0],
+    doctor: [0, 0],
+  };
+  const range = ranges[command];
+  if (!range) return;
+  const [minimum, maximum] = range;
+  if (positionals.length < minimum || positionals.length > maximum) {
+    const expected =
+      minimum === maximum ? String(minimum) : `${minimum}–${maximum}`;
+    throw new RangeError(
+      `Command '${command}' expects ${expected} positional arguments; received ${positionals.length}.`,
+    );
+  }
+}
+
 function countFiles(path: string): number {
   return readdirSync(path, { withFileTypes: true }).reduce(
     (count, entry) =>
@@ -303,4 +332,7 @@ export async function main(
   }
 }
 
-process.exitCode = await main();
+const entryPoint = process.argv[1];
+if (entryPoint && import.meta.url === pathToFileURL(entryPoint).href) {
+  process.exitCode = await main();
+}
