@@ -364,7 +364,7 @@ session cookies, view keys, or private puzzle input.
 
 ## Development
 
-Wassail uses [Vite+ 1.5](https://viteplus.dev/guide/) for runtime management,
+Wassail uses [Vite+ 1.6](https://viteplus.dev/guide/) for runtime management,
 dependencies, formatting, linting, type checking, testing, and packaging. The
 published library supports Node.js 18+, while development and Vitest 5 use the
 separately pinned Node.js 26.13.1 runtime.
