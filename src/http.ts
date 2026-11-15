@@ -1,6 +1,13 @@
 import { VERSION } from "./version.js";
 
-const DEFAULT_USER_AGENT = "+https://github.com/snally-labs/wassail";
+const DEFAULT_USER_AGENT = "+https://github.com/snally-dev/wassail";
+
+export function isTimeoutError(error: unknown): boolean {
+  return (
+    error instanceof Error &&
+    (error.name === "TimeoutError" || error.name === "AbortError")
+  );
+}
 
 export function validateUserAgent(value: string | undefined): boolean {
   return value !== undefined && /[^@\s]+@[^.\s]+\.[^\s]+/.test(value);
