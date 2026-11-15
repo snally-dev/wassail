@@ -10,14 +10,15 @@ export function getGuesses(
   day: number,
   session?: string,
 ): Table[] {
-  const cacheFile = resolveGuessFile(year, day, session);
+  const selectedSession = session ?? process.env["AOC_SESSION"];
+  const cacheFile = resolveGuessFile(year, day, selectedSession);
   if (!existsSync(cacheFile)) {
     throw new WassailError(
       `No cached guesses found yet for ${year}-12-${String(day).padStart(2, "0")}. ` +
         "Submit an answer before viewing guess history.",
     );
   }
-  return renderGuessTables(readGuesses(year, day, session, cacheFile));
+  return renderGuessTables(readGuesses(year, day, selectedSession, cacheFile));
 }
 
 function resolveGuessFile(year: number, day: number, session?: string): string {
