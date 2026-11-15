@@ -3,6 +3,7 @@ import {
   mkdtempSync,
   readFileSync,
   rmSync,
+  existsSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
@@ -18,6 +19,7 @@ import {
 import {
   checkCachedGuesses,
   classifyMessage,
+  normalizeAnswer,
   submitToAoc,
   writeGuessCache,
 } from "./answer.js";
@@ -25,7 +27,10 @@ import {
   getCacheGuessFile,
   getCacheInputFile,
   getCacheLeaderboardFile,
+  withCacheLock,
 } from "./cache.js";
+import { validateCommandArity } from "./cli.js";
+import { formatAocDateTime } from "./doctor.js";
 import {
   defaultEventDay,
   defaultEventYear,
@@ -33,6 +38,8 @@ import {
   validateEventDay,
 } from "./events.js";
 import { MissingSessionTokenError, SubmissionError } from "./errors.js";
+import { getGuesses } from "./guesses.js";
+import { resolveUserAgent } from "./http.js";
 import { getInput } from "./input.js";
 import {
   formatLeaderboardAsCsv,
@@ -95,6 +102,50 @@ describe("release metadata", () => {
       readFileSync(new URL("../package.json", import.meta.url), "utf8"),
     ) as { version: string };
     expect(VERSION).toBe(packageJson.version);
+  });
+
+  it("uses the current repository in the fallback User-Agent", () => {
+    delete process.env["AOC_USER_AGENT"];
+    vi.spyOn(process, "emitWarning").mockImplementation(() => undefined);
+    expect(resolveUserAgent()).toContain("github.com/snally-dev/wassail");
+  });
+});
+
+describe("cache locking", () => {
+  it("does not remove a successor process's lock after stale recovery", async () => {
+    const target = join(temporaryCache, "cache.json");
+    const lock = join(temporaryCache, ".cache.json.lock");
+    let releaseFirst!: () => void;
+    let releaseSecond!: () => void;
+    let markSecondAcquired!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+    const secondGate = new Promise<void>((resolve) => {
+      releaseSecond = resolve;
+    });
+    const secondAcquired = new Promise<void>((resolve) => {
+      markSecondAcquired = resolve;
+    });
+
+    const first = withCacheLock(target, () => firstGate, { staleAfterMs: 5 });
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    const second = withCacheLock(
+      target,
+      async () => {
+        markSecondAcquired();
+        await secondGate;
+      },
+      { staleAfterMs: 5 },
+    );
+    await secondAcquired;
+    expect(existsSync(lock)).toBe(true);
+    releaseFirst();
+    await first;
+    expect(existsSync(lock)).toBe(true);
+    releaseSecond();
+    await second;
+    expect(existsSync(lock)).toBe(false);
   });
 });
 
@@ -270,6 +321,26 @@ describe("answer guardrails", () => {
     );
   });
 
+  it("infers bounds for integers larger than Number.MAX_SAFE_INTEGER", async () => {
+    await writeGuessCache(
+      2025,
+      1,
+      1,
+      "9007199254740993",
+      SubmissionStatus.TOO_LOW,
+    );
+    const normalized = normalizeAnswer("9007199254740992");
+    const result = checkCachedGuesses(
+      2025,
+      1,
+      1,
+      normalized.answer,
+      normalized.numericAnswer,
+    );
+    expect(result.status).toBe(SubmissionStatus.TOO_LOW);
+    expect(result.previousGuess).toBe("9007199254740993");
+  });
+
   it("upgrades legacy four-column guess caches", async () => {
     const file = getCacheGuessFile(2025, 1);
     mkdirSync(dirname(file), { recursive: true });
@@ -314,6 +385,66 @@ describe("answer guardrails", () => {
     await expect(
       submitToAoc(2025, 1, 1, "42", "expired"),
     ).rejects.toBeInstanceOf(SubmissionError);
+  });
+
+  it("reports an ambiguous result when a submission body times out", async () => {
+    const timeout = Object.assign(new Error("timed out"), {
+      name: "TimeoutError",
+    });
+    globalThis.fetch = vi.fn(
+      async () =>
+        ({
+          status: 200,
+          ok: true,
+          text: async () => {
+            throw timeout;
+          },
+        }) as unknown as Response,
+    ) as typeof fetch;
+    await expect(submitToAoc(2025, 1, 1, "42", "account-a")).rejects.toThrow(
+      "may have been submitted",
+    );
+    expect(existsSync(getCacheGuessFile(2025, 1, "account-a"))).toBe(false);
+  });
+});
+
+describe("offline account selection", () => {
+  it("uses AOC_SESSION to select guess history", async () => {
+    await writeGuessCache(
+      2025,
+      1,
+      1,
+      10,
+      SubmissionStatus.INCORRECT,
+      "account-a",
+    );
+    await writeGuessCache(
+      2025,
+      1,
+      1,
+      20,
+      SubmissionStatus.INCORRECT,
+      "account-b",
+    );
+    process.env["AOC_SESSION"] = "account-a";
+    expect(getGuesses(2025, 1)[0]?.rows[0]?.[1]).toBe("10");
+  });
+});
+
+describe("CLI validation and diagnostics", () => {
+  it("rejects extra and missing positional arguments", () => {
+    expect(() => validateCommandArity("cache", ["extra"])).toThrow(
+      "expects 0 positional arguments",
+    );
+    expect(() => validateCommandArity("answer", ["2025", "1", "1"])).toThrow(
+      "expects 4 positional arguments",
+    );
+  });
+
+  it("formats the diagnostic clock in America/New_York", () => {
+    expect(formatAocDateTime(new Date("2026-07-01T16:00:00Z"))).toBe(
+      "2026-07-01T12:00:00-04:00[America/New_York]",
+    );
   });
 });
 
