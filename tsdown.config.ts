@@ -1,6 +1,12 @@
-import { defineConfig } from "tsdown";
+import { defineConfig } from "vite-plus/pack";
 
 export default defineConfig({
+  deps: {
+    // tsdown <0.23 compatibility: resolve external dependency subpaths.
+    // Remove to preserve subpath imports as written (the new default).
+    // https://tsdown.dev/options/dependencies#deps-resolvedepsubpath
+    resolveDepSubpath: true,
+  },
   entry: ["src/cli.ts"],
   outDir: "dist",
   format: ["esm"],
@@ -8,7 +14,7 @@ export default defineConfig({
   target: "node18",
 
   dts: {
-    oxc: true,
+    generator: "oxc",
   },
   sourcemap: true,
   clean: true,
