@@ -6,6 +6,8 @@
     "types": ["node"],
     "sourceMap": true,
     "strict": true,
+    "noImplicitAny": true,
+    "useUnknownInCatchVariables": true,
     "skipLibCheck": true,
     "isolatedModules": true,
     "verbatimModuleSyntax": true,
